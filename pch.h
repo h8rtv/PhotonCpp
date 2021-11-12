@@ -34,7 +34,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#include <limits.h>
 
 namespace photoncpp {
 	using MatrixInt = std::vector<std::vector<int>>;
