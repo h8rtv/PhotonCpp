@@ -28,7 +28,7 @@ std::pair<std::string, PhotonLayer> png2layer(const std::string & bufferPng)
 		{
 			int pos = ((w * j) + i) * 4;
 			bool present = (img[pos + 3] != 0 /* not alpha transparent */) && (img[pos] == 0 /* probably black */);
-			if (present)
+			if (!present)
 				res.supported(i, j);
 		}
 
@@ -136,6 +136,7 @@ int main(int argc, char * argv[])
 	{
 		std::cerr << "\nUsage: PngToPhoton <input-1440x2560.png> <output.photon>\n"
 		"To read data from STDIN use '-' as filename.\n"
+		"To read from a directory pass it in place of the input image.\n"
 		"To write data to STDOUT use '-' as filename.\n\n"
 		"White and transparent areas of the image are treated as voids.\n"
 		"Check with Photon File Validator after conversion. Use output at your own risk.\n";
@@ -150,6 +151,97 @@ int main(int argc, char * argv[])
 	std::string bufferModel = getModel();
 
 	PhotonFileHeader photonFileHeader(bufferModel);
+	
+//	PhotonFileLayer::calculateLayers(photonFileHeader,layers, 0);
+
+	// load png
+	std::vector<std::string> bufferPngs;
+	struct stat s;
+
+	if (std::string("-") == argv[1])
+	{
+		std::string tmp(std::istreambuf_iterator<char>(std::cin), {});
+		bufferPngs.push_back(std::move(tmp));
+	}
+	else if (stat(argv[1], &s) == 0)
+	{
+		std::string directoryPath(argv[1]);
+		if (s.st_mode & S_IFDIR)
+		{
+			DIR *dp;
+			struct dirent *ep;     
+			dp = opendir(argv[1]);
+
+			if (dp != NULL)
+			{
+				while (ep = readdir(dp)) {
+					if (strcmp(ep->d_name, ".") == 0 || strcmp(ep->d_name, "..") == 0)
+						continue;
+					std::string strPath(directoryPath);
+					strPath += "/";
+					strPath += ep->d_name;
+					std::ifstream ifPng(strPath, std::ios_base::binary);
+
+					if (ifPng.fail())
+					{
+						std::cerr << "Error opening input file.\n";
+						std::cerr << strPath << '\n';
+						return -1;
+					}
+
+					ifPng.seekg(0, std::ios::end);
+					std::streamoff size = 0;
+					size = ifPng.tellg();
+					std::string bufferPng;
+					bufferPng.resize((unsigned int)size);
+					ifPng.seekg(0);
+					ifPng.read(&bufferPng[0], size);
+					ifPng.close();
+					bufferPngs.push_back(bufferPng);
+				}
+				closedir(dp);
+			}
+			else
+				std::cerr << "Couldn't open directory " << argv[1] << std::endl;
+		}
+		else if (s.st_mode & S_IFREG)
+		{
+			std::ifstream ifPng(argv[1], std::ios_base::binary);
+
+			if (ifPng.fail())
+			{
+				std::cerr << "Error opening input file.\n";
+				return -1;
+			}
+
+			ifPng.seekg(0, std::ios::end);
+			std::streamoff size = 0;
+			size = ifPng.tellg();
+			std::string bufferPng;
+			bufferPng.resize((unsigned int)size);
+			ifPng.seekg(0);
+			ifPng.read(&bufferPng[0], size);
+			ifPng.close();
+			bufferPngs.push_back(bufferPng);
+		}
+		else
+		{
+			std::cerr << "Not a directory nor a file. \n";
+		}
+	}
+	else
+	{
+		std::cerr << "File not found. \n";
+		return -1;
+	}
+
+
+	int antiAliasLevel = 1;
+	if (photonFileHeader.getVersion() > 1) {
+		antiAliasLevel = photonFileHeader.getAntiAliasingLevel();
+	}
+
+	photonFileHeader.setNumberOfLayers(bufferPngs.size());
 	PhotonFilePreview previewOne(photonFileHeader.getPreviewOneOffsetAddress(), bufferModel);
 	PhotonFilePreview previewTwo(photonFileHeader.getPreviewTwoOffsetAddress(), bufferModel);
 	
@@ -161,63 +253,21 @@ int main(int argc, char * argv[])
 	}
 
 	int margin = 0;
-	
 	std::vector<PhotonFileLayer> layers = PhotonFileLayer::readLayers(photonFileHeader, bufferModel, margin);
+	int i = 0;
 
-//	PhotonFileLayer::calculateLayers(photonFileHeader,layers, 0);
-
-	// load png
-	std::string bufferPng;
-	
-	if (std::string("-") == argv[1])
-	{
-		std::string tmp(std::istreambuf_iterator<char>(std::cin), {});
-		bufferPng = std::move(tmp);
-	}
-	else
-	{
-		std::ifstream ifPng(argv[1], std::ios_base::binary);
-
-		if (ifPng.fail())
+	for (auto bufferPng : bufferPngs) {
+		std::pair<std::string, PhotonLayer> rle = png2layer(bufferPng);
+		if (!rle.first.empty())
 		{
-			std::cerr << "Error opening input file.\n";
+			std::cerr << rle.first << "\n";
 			return -1;
 		}
+		PhotonLayer & layerPng = rle.second;
 
-		ifPng.seekg(0, std::ios::end);
-		std::streamoff size = 0;
-		size = ifPng.tellg();
-		bufferPng.resize((unsigned int)size);
-		ifPng.seekg(0);
-		ifPng.read(&bufferPng[0], size);
-		ifPng.close();
-	}
-
-	std::pair<std::string, PhotonLayer> rle = png2layer(bufferPng);
-	if (!rle.first.empty())
-	{
-		std::cerr << rle.first << "\n";
-		return -1;
-	}
-
-	PhotonLayer & layerPng = rle.second;
-	int antiAliasLevel = 1;
-	if (photonFileHeader.getVersion() > 1) {
-		antiAliasLevel = photonFileHeader.getAntiAliasingLevel();
-	}
-
-	for (int i = 0; i < photonFileHeader.getNumberOfLayers(); i++) {
-		PhotonFileLayer & layer = layers.at(i);
+		PhotonFileLayer & layer = layers.at(i++);
 		layer.saveLayer(layerPng);
-		if (antiAliasLevel > 1) {
-			for (int a = 0; a < (antiAliasLevel - 1); a++) {
-				layer.getAntiAlias(a).saveLayer(layerPng);
-			}
-		}
 	}
-
-
-
 
 	// writing is here:
 	int headerPos = 0;
@@ -258,11 +308,6 @@ int main(int argc, char * argv[])
 	for (int i = 0; i < photonFileHeader.getNumberOfLayers(); i++) {
 		PhotonFileLayer & layer = layers.at(i);
 		dataPosition = layer.savePos(dataPosition);
-		if (antiAliasLevel > 1) {
-			for (int a = 0; a < (antiAliasLevel - 1); a++) {
-				dataPosition = layer.getAntiAlias(a).savePos(dataPosition);
-			}
-		}
 	}
 
 	// Order for backward compatibility with photon/cbddlp version 1
@@ -270,24 +315,12 @@ int main(int argc, char * argv[])
 		layers.at(i).save(os);
 	}
 
-	if (antiAliasLevel > 1) {
-		for (int a = 0; a < (antiAliasLevel - 1); a++) {
-			for (int i = 0; i < photonFileHeader.getNumberOfLayers(); i++) {
-				layers.at(i).getAntiAlias(a).save(os);
-			}
-		}
-	}
-
 	// Optimize order for speed read on photon
 	for (int i = 0; i < photonFileHeader.getNumberOfLayers(); i++) {
 		PhotonFileLayer & layer = layers.at(i);
 		layer.saveData(os);
-		if (antiAliasLevel > 1) {
-			for (int a = 0; a < (antiAliasLevel - 1); a++) {
-				layer.getAntiAlias(a).saveData(os);
-			}
-		}
 	}
+	ofs.close();
 
 	return 0;
 }

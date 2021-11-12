@@ -245,6 +245,10 @@ public:
         offTimeSeconds_ = offTimeSeconds;
     }
 
+    void setNumberOfLayers(int numberOfLayers) {
+        numberOfLayers_ = numberOfLayers;
+    }
+
     void setBottomLayers(int bottomLayers) {
         bottomLayers_ = bottomLayers;
     }

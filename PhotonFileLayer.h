@@ -133,6 +133,16 @@ public:
         return 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4;
     }
 
+    void setDataAddress(int i)
+	{
+		dataAddress_ = i;
+	}
+
+	void setDataSize(int i)
+	{
+		dataSize_ = i;
+	}
+
 	std::vector<photoncpp::BitSet> unpackImage(int resolutionX_) {
         pixels_ = 0;
         resolutionX_ = resolutionX_ - 1;
@@ -243,35 +253,21 @@ public:
         }
 
         int layerCount = photonFileHeader_.getNumberOfLayers();
+		layers.reserve(layerCount);
 
 		std::string data(fileContent.begin() + photonFileHeader_.getLayersDefinitionOffsetAddress(), fileContent.end());
 		std::stringstream ss(data);
 		PhotonInputStream ds(ss);
 		
-		{
-            std::map<int, PhotonFileLayer> layerMap;
-            for (int i = 0; i < layerCount; i++) {
+        for (int i = 0; i < layerCount; i++) {
 
-                //iPhotonProgress.showInfo("Reading photon file layer " + (i + 1) + "/" + photonFileHeader_.getNumberOfLayers());
+            //iPhotonProgress.showInfo("Reading photon file layer " + (i + 1) + "/" + photonFileHeader_.getNumberOfLayers());
 
-                PhotonFileLayer layer(ds, photonFileHeader_.getResolutionX(), photonFileHeader_.getResolutionY());
-                layer.imageData_.assign(fileContent.begin() + layer.dataAddress_, fileContent.begin() + layer.dataAddress_ + layer.dataSize_);
-                layers.push_back(layer);
-                layerMap[i] = layer;
-            }
-
-            if (antiAliasLevel > 1) {
-                for (int a = 0; a < (antiAliasLevel - 1); a++) {
-                    for (int i = 0; i < layerCount; i++) {
-                        //iPhotonProgress.showInfo("Reading photon file AA " + (2 + a) + "/" + antiAliasLevel + " layer " + (i + 1) + "/" + photonFileHeader_.getNumberOfLayers());
-
-                        PhotonFileLayer layer(ds, photonFileHeader_.getResolutionX(), photonFileHeader_.getResolutionY());
-                        layer.imageData_.assign(fileContent.begin() + layer.dataAddress_, fileContent.begin() + layer.dataAddress_ + layer.dataSize_);
-
-                        layerMap[i].addAntiAliasLayer(layer);
-                    }
-                }
-            }
+            PhotonFileLayer layer(i * 0.05, photonFileHeader_.getResolutionX(), photonFileHeader_.getResolutionY());
+            layer.setDataAddress(832 + 29494*i);//Coloca a layer no seu endereço certo
+            layer.setDataSize(29494);//Tamanho do layer.
+            layer.imageData_.assign(layer.dataAddress_, layer.dataAddress_ + layer.dataSize_);
+            layers.push_back(layer);
         }
 
         photonLayer.unLink();
