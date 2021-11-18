@@ -132,9 +132,9 @@ std::string getModel()
 
 int main(int argc, char * argv[])
 {
-	if (argc != 3)
+	if (argc != 3 && argc != 4)
 	{
-		std::cerr << "\nUsage: PngToPhoton <input-1440x2560.png> <output.photon>\n"
+		std::cerr << "\nUsage: PngToPhoton <input-1440x2560.png or directory> <output.photon> <layer_thickness?>\n"
 		"To read data from STDIN use '-' as filename.\n"
 		"To read from a directory pass it in place of the input image.\n"
 		"To write data to STDOUT use '-' as filename.\n\n"
@@ -152,16 +152,14 @@ int main(int argc, char * argv[])
 
 	PhotonFileHeader photonFileHeader(bufferModel);
 	
-//	PhotonFileLayer::calculateLayers(photonFileHeader,layers, 0);
-
 	// load png
-	std::vector<std::string> bufferPngs;
+	std::map<std::string, std::string> bufferPngs;
 	struct stat s;
 
 	if (std::string("-") == argv[1])
 	{
 		std::string tmp(std::istreambuf_iterator<char>(std::cin), {});
-		bufferPngs.push_back(std::move(tmp));
+		bufferPngs[argv[1]] = std::move(tmp);
 	}
 	else if (stat(argv[1], &s) == 0)
 	{
@@ -197,7 +195,7 @@ int main(int argc, char * argv[])
 					ifPng.seekg(0);
 					ifPng.read(&bufferPng[0], size);
 					ifPng.close();
-					bufferPngs.push_back(bufferPng);
+					bufferPngs[strPath] = bufferPng;
 				}
 				closedir(dp);
 			}
@@ -222,7 +220,7 @@ int main(int argc, char * argv[])
 			ifPng.seekg(0);
 			ifPng.read(&bufferPng[0], size);
 			ifPng.close();
-			bufferPngs.push_back(bufferPng);
+			bufferPngs[argv[1]] = bufferPng;
 		}
 		else
 		{
@@ -253,11 +251,14 @@ int main(int argc, char * argv[])
 	}
 
 	int margin = 0;
-	std::vector<PhotonFileLayer> layers = PhotonFileLayer::readLayers(photonFileHeader, bufferModel, margin);
+	float layerThickness = (argc == 4 ? atof(argv[3]) : 0.02f);
+	std::vector<PhotonFileLayer> layers = PhotonFileLayer::readLayers(photonFileHeader, bufferModel, margin, layerThickness);
 	int i = 0;
 
+	//std::sort(bufferPngs.begin(), bufferPngs.end());
+
 	for (auto bufferPng : bufferPngs) {
-		std::pair<std::string, PhotonLayer> rle = png2layer(bufferPng);
+		std::pair<std::string, PhotonLayer> rle = png2layer(bufferPng.second);
 		if (!rle.first.empty())
 		{
 			std::cerr << rle.first << "\n";

@@ -242,7 +242,7 @@ public:
     }
 
 
-    static std::vector<PhotonFileLayer> readLayers(const PhotonFileHeader & photonFileHeader_, const std::string & fileContent, int margin/*, IPhotonProgress & iPhotonProgress*/) {
+    static std::vector<PhotonFileLayer> readLayers(const PhotonFileHeader & photonFileHeader_, const std::string & fileContent, int margin, float layerThickness) {
         PhotonLayer photonLayer(photonFileHeader_.getResolutionX(), photonFileHeader_.getResolutionY());
 
 		std::vector<PhotonFileLayer> layers;
@@ -263,7 +263,7 @@ public:
 
             //iPhotonProgress.showInfo("Reading photon file layer " + (i + 1) + "/" + photonFileHeader_.getNumberOfLayers());
 
-            PhotonFileLayer layer(i * 0.05, photonFileHeader_.getResolutionX(), photonFileHeader_.getResolutionY());
+            PhotonFileLayer layer(i * layerThickness, photonFileHeader_.getResolutionX(), photonFileHeader_.getResolutionY());
             layer.setDataAddress(832 + 29494*i);//Coloca a layer no seu endereço certo
             layer.setDataSize(29494);//Tamanho do layer.
             layer.imageData_.assign(layer.dataAddress_, layer.dataAddress_ + layer.dataSize_);
